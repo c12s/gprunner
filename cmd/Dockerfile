@@ -12,16 +12,12 @@ COPY . .
 
 RUN go build -o build.bin ./cmd
 
-# Stage 1b: patched kraft
-#
-# Stock kraft cannot attach a second guest to a bridge while another is
-# running (its network Update re-creates every live tap and the kernel
-# refuses). Built from fork
+# Stage 2: Kraft
 
 FROM golang:1.26-alpine AS kraft
 
-ARG KRAFTKIT_REPO=https://github.com/vukedd/kraftkit
-ARG KRAFTKIT_REF=vukedd/fix-bridge-update
+ARG KRAFTKIT_REPO=https://github.com/unikraft/kraftkit
+ARG KRAFTKIT_REF=v0.12.16-13-g22e305d1
 
 RUN apk add --no-cache git
 
@@ -29,7 +25,7 @@ RUN git clone --depth 1 --branch "${KRAFTKIT_REF}" "${KRAFTKIT_REPO}" /kraftkit 
     && cd /kraftkit \
     && CGO_ENABLED=0 go build -o /kraft ./cmd/kraft
 
-# Stage 2: Run
+# Stage 3: Run
 
 FROM kraftkit.sh/base:latest AS run
 
