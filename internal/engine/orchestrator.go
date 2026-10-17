@@ -13,20 +13,19 @@ import (
 const layerPrefix = "gp"
 
 type Orchestrator struct {
-	res    *resolver.BuildResolver
-	store  *persistence.Store
-	imgDir string
-	mqAddr string
-	logger *slog.Logger
+	res         *resolver.BuildResolver
+	concurrency int
+	store       *persistence.Store
+	imgDir      string
+	mqAddr      string
+	logger      *slog.Logger
 }
 
-func NewOrchestrator(r *resolver.BuildResolver, l *slog.Logger, store *persistence.Store, imgDir, mqAddr string) *Orchestrator {
-	return &Orchestrator{res: r, logger: l, store: store, imgDir: imgDir, mqAddr: mqAddr}
+func NewOrchestrator(r *resolver.BuildResolver, c int, l *slog.Logger, store *persistence.Store, imgDir, mqAddr string) *Orchestrator {
+	return &Orchestrator{res: r, concurrency: c, logger: l, store: store, imgDir: imgDir, mqAddr: mqAddr}
 }
 
 func (o *Orchestrator) InstantiateChart(ctx context.Context, chart model.Chart) error {
-	layers := chart.ChartData
-
 	if err := o.clearStaleMachines(ctx, chart); err != nil {
 		return err
 	}
@@ -37,6 +36,7 @@ func (o *Orchestrator) InstantiateChart(ctx context.Context, chart model.Chart) 
 		return err
 	}
 
+	layers := chart.ChartData
 	imageMap, err := o.res.ResolveLayers(ctx, layers, topicMap)
 	if err != nil {
 		return fmt.Errorf("an error has occurred while resolving layers: %w", err)
@@ -44,47 +44,9 @@ func (o *Orchestrator) InstantiateChart(ctx context.Context, chart model.Chart) 
 
 	MQAddr := o.mqAddr
 
-	if err := o.store.UpdateChartState(ctx, chart.Metadata.ID, persistence.ChartStarting); err != nil {
-		o.logger.Error("error occurred while updating chart state", "chart", chart.Metadata.Name, "new_state", persistence.ChartStarting.String())
+	// TODO: add logging
+	if err := o.RunAll(ctx, chart, topicMap, imageMap, MQAddr); err != nil {
 		return err
-	}
-
-	// a chart is either fully up or fully down: any failure from here on,
-	// including a cancelled ctx, takes down what already booted
-	for _, pcd := range layers.StoredProcedures {
-		if err := ctx.Err(); err != nil {
-			return o.abortStart(ctx, chart, err)
-		}
-		layerName := machineName(chart.Metadata.ID, pcd.Metadata.ID)
-
-		if err := RunLayer(imageMap[pcd.Metadata.ID], o.imgDir, "", layerName, pcd.Control, pcd.Features, pcd.Links, layers.DataSources, nil); err != nil {
-			return o.abortStart(ctx, chart, fmt.Errorf("an error has occurred while running layer %q: %w", pcd.Metadata.Name, err))
-		}
-	}
-
-	for _, et := range layers.EventTriggers {
-		if err := ctx.Err(); err != nil {
-			return o.abortStart(ctx, chart, err)
-		}
-		topics, err := resolveEventLinks(et.Links.EventLinks, topicMap)
-		if err != nil {
-			return o.abortStart(ctx, chart, fmt.Errorf("layer %q: %w", et.Metadata.Name, err))
-		}
-		layerName := machineName(chart.Metadata.ID, et.Metadata.ID)
-		if err := RunLayer(imageMap[et.Metadata.ID], o.imgDir, MQAddr, layerName, et.Control, et.Features, et.Links, layers.DataSources, topics); err != nil {
-			return o.abortStart(ctx, chart, fmt.Errorf("an error has occurred while running layer %q: %w", et.Metadata.Name, err))
-		}
-	}
-
-	for _, e := range layers.Events {
-		if err := ctx.Err(); err != nil {
-			return o.abortStart(ctx, chart, err)
-		}
-		layerName := machineName(chart.Metadata.ID, e.Metadata.ID)
-		topics := []string{topicMap[e.Metadata.Name]}
-		if err := RunLayer(imageMap[e.Metadata.ID], o.imgDir, MQAddr, layerName, e.Control, e.Features, model.Links{}, layers.DataSources, topics); err != nil {
-			return o.abortStart(ctx, chart, fmt.Errorf("an error has occurred while running layer %q: %w", e.Metadata.Name, err))
-		}
 	}
 
 	if err := o.store.UpdateChartState(ctx, chart.Metadata.ID, persistence.ChartStarted); err != nil {
