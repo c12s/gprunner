@@ -1,0 +1,149 @@
+{
+    "apiVersion": "v1.0.1",
+    "schemaVersion": "v1.0.10",
+    "kind": "StarChart",
+    "metadata": {
+        "labels": {
+            "key": "value"
+        },
+        "tags": {
+            "key": "value"
+        },
+        "id": "a0715e59-49c3-4323-bf34-fbb4ccb7e8t8",
+        "name": "Race chart 1",
+        "namespace": "race1",
+        "maintainer": "Milant",
+        "description": "My test chart.",
+        "visibility": "public",
+        "engine": "unikraft"
+    },
+    "chart": {
+        "dataSources": {},
+        "storedProcedures": {},
+        "eventTriggers": {
+            "Event Trigger 1": {
+                "metadata": {
+                    "labels": {
+                        "key3": "value"
+                    },
+                    "tags": {
+                        "key": "value"
+                    },
+                    "id": "1f9f4dff-8f6a-44a2-98a6-256ab48b6128",
+                    "name": "Memcached Trigger",
+                    "image": "unikraft.org/memcached:1.6",
+                    "build": {},
+                    "prefix": "DEBUG",
+                    "topic": "",
+                    "description": "Memcached cache trigger"
+                },
+                "control": {
+                    "disableVirtualization": false,
+                    "runDetached": true,
+                    "removeOnStop": true,
+                    "memory": "128Mi",
+                    "kernelArgs": "/usr/bin/memcached -u root -m 64"
+                },
+                "features": {
+                    "networks": [
+                        "network3:172.102.0.1",
+                        "network4:172.102.0.2"
+                    ],
+                    "ports": [],
+                    "volumes": [
+                    ],
+                    "targets": [
+                        "qemu/x86_64"
+                    ],
+                    "envVars": []
+                },
+                "links": {
+                    "softLinks": [],
+                    "hardLinks": [],
+                    "eventLinks": []
+                }
+            },
+            "Event Trigger 2": {
+                "metadata": {
+                    "labels": {
+                        "key3": "value"
+                    },
+                    "tags": {
+                        "key": "value"
+                    },
+                    "id": "1f9f4dff-8f6a-44a2-98a6-256ab48b6127",
+                    "name": "Event Trigger 3",
+                    "image": "unikraft.org/nginx:1.25",
+                    "build": {},
+                    "prefix": "DEBUG",
+                    "topic": "",
+                    "description": "Event Trigger 3"
+                },
+                "control": {
+                    "disableVirtualization": false,
+                    "runDetached": true,
+                    "removeOnStop": true,
+                    "memory": "64Mi",
+                    "kernelArgs": "/usr/bin/nginx"
+                },
+                "features": {
+                    "networks": [
+                        "network3:172.102.0.1",
+                        "network4:172.102.0.2"
+                    ],
+                    "ports": [],
+                    "volumes": [
+                    ],
+                    "targets": [
+                        "qemu/x86_64"
+                    ],
+                    "envVars": []
+                },
+                "links": {
+                    "softLinks": [],
+                    "hardLinks": [],
+                    "eventLinks": []
+                }
+            },
+            "Event Trigger 3": {
+                "metadata": {
+                    "labels": { "key3": "value" },
+                    "tags": { "key": "value" },
+                    "id": "1f9f4dff-8f6a-44a2-98a6-256ab48b6126",
+                    "name": "Caddy Trigger",
+                    "image": "unikraft.org/caddy:2.7",
+                    "build": {},
+                    "prefix": "DEBUG",
+                    "topic": "",
+                    "description": "Caddy web server trigger"
+                },
+                "control": {
+                    "disableVirtualization": false,
+                    "runDetached": true,
+                    "removeOnStop": true,
+                    "memory": "256Mi",
+                    "kernelArgs": "/usr/bin/caddy run --config /etc/caddy/Caddyfile"
+                },
+                "features": {
+                    "networks": [
+                        "network3:172.102.0.1",
+                        "network4:172.102.0.2"
+                    ],
+                    "ports": [],
+                    "volumes": [
+                    ],
+                    "targets": [
+                        "qemu/x86_64"
+                    ],
+                    "envVars": []
+                },
+                "links": {
+                    "softLinks": [],
+                    "hardLinks": [],
+                    "eventLinks": []
+                }
+            }
+        },
+        "events": {}
+    }
+}

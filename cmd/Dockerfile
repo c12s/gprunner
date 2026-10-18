@@ -16,8 +16,8 @@ RUN go build -o build.bin ./cmd
 
 FROM golang:1.26-alpine AS kraft
 
-ARG KRAFTKIT_REPO=https://github.com/unikraft/kraftkit
-ARG KRAFTKIT_REF=v0.12.16-13-g22e305d1
+ARG KRAFTKIT_REPO=https://github.com/vukedd/kraftkit
+ARG KRAFTKIT_REF=vukedd/fix-bridge-concurrent-run
 
 RUN apk add --no-cache git
 
