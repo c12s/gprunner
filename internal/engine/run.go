@@ -53,25 +53,25 @@ func (o *Orchestrator) RunAll(ctx context.Context, chart model.Chart, topicMap m
 	}
 
 	// procedures
-	if err := o.RunPhase(ctx, jg.pcdJobs); err != nil {
+	if err := o.runPhase(ctx, jg.pcdJobs); err != nil {
 		return o.abortStart(ctx, chart, fmt.Errorf("starting stored procedures: %w", err))
 	}
 
 	// event triggers
-	if err := o.RunPhase(ctx, jg.etJobs); err != nil {
+	if err := o.runPhase(ctx, jg.etJobs); err != nil {
 		return o.abortStart(ctx, chart, fmt.Errorf("starting event triggers: %w", err))
 
 	}
 
 	// events
-	if err := o.RunPhase(ctx, jg.eJobs); err != nil {
+	if err := o.runPhase(ctx, jg.eJobs); err != nil {
 		return o.abortStart(ctx, chart, fmt.Errorf("starting events: %w", err))
 	}
 
 	return nil
 }
 
-func (o *Orchestrator) RunPhase(ctx context.Context, jobs []RunJob) error {
+func (o *Orchestrator) runPhase(ctx context.Context, jobs []RunJob) error {
 	g, gctx := errgroup.WithContext(ctx)
 	g.SetLimit(o.concurrency)
 
