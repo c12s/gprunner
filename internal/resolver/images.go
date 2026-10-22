@@ -35,23 +35,18 @@ type Timeouts struct {
 	Build   time.Duration
 }
 
-type MaxConcurrency struct {
-	Resolve int
-	Run     int
-}
-
 type BuildResolver struct {
 	imgDir      string
 	bldDir      string
 	store       *persistence.Store
 	logger      *slog.Logger
 	timeouts    Timeouts
-	concurrency MaxConcurrency
+	concurrency int
 	sf          singleflight.Group
 }
 
-func NewBuildResolver(l *slog.Logger, imgDir, bldDir string, s *persistence.Store, t Timeouts, mc MaxConcurrency) *BuildResolver {
-	return &BuildResolver{logger: l, imgDir: imgDir, bldDir: bldDir, store: s, timeouts: t, concurrency: mc}
+func NewBuildResolver(l *slog.Logger, imgDir, bldDir string, s *persistence.Store, t Timeouts, c int) *BuildResolver {
+	return &BuildResolver{logger: l, imgDir: imgDir, bldDir: bldDir, store: s, timeouts: t, concurrency: c}
 }
 
 // general
@@ -85,7 +80,7 @@ func (r *BuildResolver) resolveAll(
 	jobs := transformToJobs(procedures, triggers, events)
 
 	g, gctx := errgroup.WithContext(ctx)
-	g.SetLimit(r.concurrency.Resolve)
+	g.SetLimit(r.concurrency)
 	var mu sync.Mutex
 	imageMap := make(map[string]string)
 

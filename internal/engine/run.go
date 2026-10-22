@@ -1,14 +1,17 @@
 package engine
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 
+	"github.com/c12s/gprunner/internal/persistence"
 	"github.com/c12s/gprunner/internal/resolver"
 	"github.com/c12s/gprunner/pkg/model"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -26,14 +29,77 @@ const (
 	topicsEnv = "TOPICS"
 )
 
-func RunLayer(
-	contentKey, imageDir, MQAddr, layerName string,
-	ctrl model.Control, ftr model.Features,
-	links model.Links,
-	datasources map[string]model.DataSource,
-	topics []string,
+type RunJob struct {
+	contentKey  string
+	MQAddr      string
+	layerName   string
+	machineName string
+	ftrs        model.Features
+	ctrl        model.Control
+	links       model.Links
+	datasources map[string]model.DataSource
+	topics      []string
+}
+
+func (o *Orchestrator) RunAll(ctx context.Context, chart model.Chart, topicMap map[string]string, imageMap map[string]string, MQAddr string) error {
+	jg, err := buildJobGroup(chart, topicMap, imageMap, MQAddr)
+	if err != nil {
+		return fmt.Errorf("building run jobs: %w", err)
+	}
+
+	if err := o.store.UpdateChartState(ctx, chart.Metadata.ID, persistence.ChartStarting); err != nil {
+		o.logger.Error("error occurred while updating chart state", "chart", chart.Metadata.Name, "new_state", persistence.ChartStarting.String())
+		return err
+	}
+
+	// procedures
+	if err := o.runPhase(ctx, jg.pcdJobs); err != nil {
+		return o.abortStart(ctx, chart, fmt.Errorf("starting stored procedures: %w", err))
+	}
+
+	// event triggers
+	if err := o.runPhase(ctx, jg.etJobs); err != nil {
+		return o.abortStart(ctx, chart, fmt.Errorf("starting event triggers: %w", err))
+
+	}
+
+	// events
+	if err := o.runPhase(ctx, jg.eJobs); err != nil {
+		return o.abortStart(ctx, chart, fmt.Errorf("starting events: %w", err))
+	}
+
+	return nil
+}
+
+func (o *Orchestrator) runPhase(ctx context.Context, jobs []RunJob) error {
+	g, gctx := errgroup.WithContext(ctx)
+	g.SetLimit(o.concurrency)
+
+	for _, job := range jobs {
+		g.Go(func() error {
+			if err := gctx.Err(); err != nil {
+				return err
+			}
+
+			if err := runLayer(o.imgDir, job); err != nil {
+				return fmt.Errorf("layer %q: %w", job.layerName, err)
+			}
+
+			return nil
+		})
+	}
+	if err := g.Wait(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func runLayer(
+	imgDir string,
+	job RunJob,
 ) error {
-	binDir := filepath.Join(imageDir, contentKey, "unikraft", "bin")
+	binDir := filepath.Join(imgDir, job.contentKey, "unikraft", "bin")
 
 	// Layers built from a Kraftfile without a rootfs have no initrd.
 	initrd := filepath.Join(binDir, "initrd")
@@ -41,7 +107,7 @@ func RunLayer(
 		initrd = ""
 	}
 
-	args, err := BuildArgs(filepath.Join(binDir, "kernel"), initrd, MQAddr, layerName, ctrl, ftr, links, datasources, topics)
+	args, err := BuildArgs(filepath.Join(binDir, "kernel"), initrd, job.MQAddr, job.machineName, job.ctrl, job.ftrs, job.links, job.datasources, job.topics)
 	if err != nil {
 		return err
 	}
@@ -162,4 +228,66 @@ func volumeSpec(ds model.DataSource) string {
 	}
 
 	return host + ":" + filepath.Join(dataSourceMountRoot, ds.Name)
+}
+
+type JobGroup struct {
+	pcdJobs []RunJob
+	etJobs  []RunJob
+	eJobs   []RunJob
+}
+
+func buildJobGroup(chart model.Chart, topicMap map[string]string, imageMap map[string]string, MQAddr string) (JobGroup, error) {
+	layers := chart.ChartData
+	jg := JobGroup{}
+
+	for _, pcd := range layers.StoredProcedures {
+		rj := RunJob{
+			contentKey:  imageMap[pcd.Metadata.ID],
+			MQAddr:      "",
+			machineName: machineName(chart.Metadata.ID, pcd.Metadata.ID),
+			ftrs:        pcd.Features,
+			ctrl:        pcd.Control,
+			links:       pcd.Links,
+			datasources: layers.DataSources,
+			topics:      nil,
+			layerName:   pcd.Metadata.Name,
+		}
+		jg.pcdJobs = append(jg.pcdJobs, rj)
+	}
+
+	for _, et := range layers.EventTriggers {
+		topics, err := resolveEventLinks(et.Links.EventLinks, topicMap)
+		if err != nil {
+			return JobGroup{}, fmt.Errorf("layer %q: %w", et.Metadata.Name, err)
+		}
+		rj := RunJob{
+			contentKey:  imageMap[et.Metadata.ID],
+			MQAddr:      MQAddr,
+			machineName: machineName(chart.Metadata.ID, et.Metadata.ID),
+			ftrs:        et.Features,
+			ctrl:        et.Control,
+			links:       et.Links,
+			datasources: layers.DataSources,
+			topics:      topics,
+			layerName:   et.Metadata.Name,
+		}
+		jg.etJobs = append(jg.etJobs, rj)
+	}
+
+	for _, e := range layers.Events {
+		rj := RunJob{
+			contentKey:  imageMap[e.Metadata.ID],
+			MQAddr:      MQAddr,
+			machineName: machineName(chart.Metadata.ID, e.Metadata.ID),
+			ftrs:        e.Features,
+			ctrl:        e.Control,
+			links:       model.Links{},
+			datasources: layers.DataSources,
+			topics:      []string{topicMap[e.Metadata.Name]},
+			layerName:   e.Metadata.Name,
+		}
+		jg.eJobs = append(jg.eJobs, rj)
+	}
+
+	return jg, nil
 }

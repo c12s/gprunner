@@ -43,13 +43,14 @@ var (
 )
 
 type Config struct {
-	CacheDir       string
-	Logger         *slog.Logger
-	BrokerAddr     string
-	BrokerSubnet   string
-	NetworkTimeout time.Duration
-	BuildTimeout   time.Duration
-	MaxConcurrency int
+	CacheDir           string
+	Logger             *slog.Logger
+	BrokerAddr         string
+	BrokerSubnet       string
+	NetworkTimeout     time.Duration
+	BuildTimeout       time.Duration
+	ResolveConcurrency int
+	RunConcurrency     int
 }
 
 func New(ctx context.Context, cfg Config) (*Runner, error) {
@@ -78,13 +79,12 @@ func New(ctx context.Context, cfg Config) (*Runner, error) {
 	}
 
 	// concurrency
-	if cfg.MaxConcurrency <= 0 {
-		cfg.MaxConcurrency = DefaultMaxConcurrency
+	if cfg.ResolveConcurrency <= 0 {
+		cfg.ResolveConcurrency = DefaultMaxConcurrency
 	}
 
-	mc := resolver.MaxConcurrency{
-		Run:     cfg.MaxConcurrency,
-		Resolve: cfg.MaxConcurrency,
+	if cfg.RunConcurrency <= 0 {
+		cfg.RunConcurrency = DefaultMaxConcurrency
 	}
 
 	// sqlite prep
@@ -93,7 +93,7 @@ func New(ctx context.Context, cfg Config) (*Runner, error) {
 		return nil, fmt.Errorf("gprunner: opening store: %w", err)
 	}
 
-	r := resolver.NewBuildResolver(cfg.Logger, dirs.image, dirs.build, s, t, mc)
+	r := resolver.NewBuildResolver(cfg.Logger, dirs.image, dirs.build, s, t, cfg.ResolveConcurrency)
 
 	// a resolve that died with the previous process leaves clones, staging
 	// directories and kraft packages behind; nothing can be resolving yet, so
@@ -134,7 +134,7 @@ func New(ctx context.Context, cfg Config) (*Runner, error) {
 		return nil, fmt.Errorf("gprunner: broker forwarder: %w", err)
 	}
 
-	o := engine.NewOrchestrator(r, cfg.Logger, s, dirs.image, mqAddr)
+	o := engine.NewOrchestrator(r, cfg.RunConcurrency, cfg.Logger, s, dirs.image, mqAddr)
 
 	// a previous run may have died mid-operation, so every chart is set to
 	// stopped before any caller can start new ones.
