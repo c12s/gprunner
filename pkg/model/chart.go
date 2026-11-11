@@ -11,6 +11,12 @@ type ChartRef struct {
 	Namespace     string
 	Maintainer    string
 	SchemaVersion string
+	Layers        map[string]LayerSelector
+}
+
+type LayerSelector struct {
+	Semver string
+	Arch   string
 }
 
 type Chart struct {
@@ -67,6 +73,10 @@ type LayerMetadata struct {
 	Prefix      string            `json:"prefix"`
 	Topic       string            `json:"topic"`
 	Description string            `json:"description"`
+	Pin         string            `json:"pin"`
+	Sha         string            `json:"sha"`
+	Semver      string            `json:"semver"`
+	Arch        string            `json:"arch"`
 }
 
 type BuildConfig struct {
