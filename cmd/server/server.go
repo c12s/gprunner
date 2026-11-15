@@ -85,9 +85,15 @@ func (s *Server) pull(ctx context.Context, pullReq layeredReq) (model.Chart, err
 	chart, err := s.starmap.GetChart(ctx, ref)
 	if err != nil {
 		s.logger.Error("fetch chart", "chart", ref.Name, "err", err)
-		// starmap's own code (NotFound, Unavailable...) is the useful one
-		if st, ok := status.FromError(errors.Unwrap(err)); ok {
-			return model.Chart{}, st.Err()
+		if errors.Is(err, starmap.ErrNoDigest) {
+			return model.Chart{}, status.Error(codes.NotFound, err.Error())
+		}
+		// starmap's own code (NotFound, Unavailable...) is the useful one; an
+		// error that wraps nothing unwraps to nil, which FromError reports as OK
+		if inner := errors.Unwrap(err); inner != nil {
+			if st, ok := status.FromError(inner); ok {
+				return model.Chart{}, st.Err()
+			}
 		}
 		return model.Chart{}, status.Error(codes.Internal, err.Error())
 	}

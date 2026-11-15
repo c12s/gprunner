@@ -242,9 +242,9 @@ func buildJobGroup(chart model.Chart, topicMap map[string]string, imageMap map[s
 
 	for _, pcd := range layers.StoredProcedures {
 		rj := RunJob{
-			contentKey:  imageMap[pcd.Metadata.ID],
+			contentKey:  imageMap[model.LayerKey(model.LayerKindProcedure, pcd.Metadata.Name)],
 			MQAddr:      "",
-			machineName: machineName(chart.Metadata.ID, pcd.Metadata.ID),
+			machineName: machineName(chart.Metadata.ID, model.LayerKey(model.LayerKindProcedure, pcd.Metadata.Name)),
 			ftrs:        pcd.Features,
 			ctrl:        pcd.Control,
 			links:       pcd.Links,
@@ -261,9 +261,9 @@ func buildJobGroup(chart model.Chart, topicMap map[string]string, imageMap map[s
 			return JobGroup{}, fmt.Errorf("layer %q: %w", et.Metadata.Name, err)
 		}
 		rj := RunJob{
-			contentKey:  imageMap[et.Metadata.ID],
+			contentKey:  imageMap[model.LayerKey(model.LayerKindTrigger, et.Metadata.Name)],
 			MQAddr:      MQAddr,
-			machineName: machineName(chart.Metadata.ID, et.Metadata.ID),
+			machineName: machineName(chart.Metadata.ID, model.LayerKey(model.LayerKindTrigger, et.Metadata.Name)),
 			ftrs:        et.Features,
 			ctrl:        et.Control,
 			links:       et.Links,
@@ -276,9 +276,9 @@ func buildJobGroup(chart model.Chart, topicMap map[string]string, imageMap map[s
 
 	for _, e := range layers.Events {
 		rj := RunJob{
-			contentKey:  imageMap[e.Metadata.ID],
+			contentKey:  imageMap[model.LayerKey(model.LayerKindEvent, e.Metadata.Name)],
 			MQAddr:      MQAddr,
-			machineName: machineName(chart.Metadata.ID, e.Metadata.ID),
+			machineName: machineName(chart.Metadata.ID, model.LayerKey(model.LayerKindEvent, e.Metadata.Name)),
 			ftrs:        e.Features,
 			ctrl:        e.Control,
 			links:       model.Links{},

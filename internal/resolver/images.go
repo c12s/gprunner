@@ -49,7 +49,7 @@ func NewBuildResolver(l *slog.Logger, imgDir, bldDir string, s *persistence.Stor
 	return &BuildResolver{logger: l, imgDir: imgDir, bldDir: bldDir, store: s, timeouts: t, concurrency: c}
 }
 
-// general
+// ResolveLayers returns the image of each layer keyed by model.LayerKey
 func (r *BuildResolver) ResolveLayers(ctx context.Context, layers model.ChartConfig, topicMap map[string]string) (map[string]string, error) {
 	procedures, triggers, events := layers.StoredProcedures, layers.EventTriggers, layers.Events
 	datasources := layers.DataSources
@@ -63,7 +63,7 @@ func (r *BuildResolver) ResolveLayers(ctx context.Context, layers model.ChartCon
 }
 
 type resolveJob struct {
-	LayerID  string
+	LayerKey string
 	Features model.Features
 	Metadata model.LayerMetadata
 	Links    model.Links
@@ -91,7 +91,7 @@ func (r *BuildResolver) resolveAll(
 				return err
 			}
 			mu.Lock()
-			imageMap[job.LayerID] = ck
+			imageMap[job.LayerKey] = ck
 			mu.Unlock()
 			return nil
 		})
@@ -535,13 +535,13 @@ func transformToJobs(procedures map[string]model.StoredProcedure, triggers map[s
 
 	jobs := make([]resolveJob, 0, jobs_size)
 	for _, p := range procedures {
-		jobs = append(jobs, resolveJob{p.Metadata.ID, p.Features, p.Metadata, p.Links})
+		jobs = append(jobs, resolveJob{model.LayerKey(model.LayerKindProcedure, p.Metadata.Name), p.Features, p.Metadata, p.Links})
 	}
 	for _, et := range triggers {
-		jobs = append(jobs, resolveJob{et.Metadata.ID, et.Features, et.Metadata, et.Links})
+		jobs = append(jobs, resolveJob{model.LayerKey(model.LayerKindTrigger, et.Metadata.Name), et.Features, et.Metadata, et.Links})
 	}
 	for _, e := range events {
-		jobs = append(jobs, resolveJob{e.Metadata.ID, e.Features, e.Metadata, model.Links{}})
+		jobs = append(jobs, resolveJob{model.LayerKey(model.LayerKindEvent, e.Metadata.Name), e.Features, e.Metadata, model.Links{}})
 	}
 
 	return jobs

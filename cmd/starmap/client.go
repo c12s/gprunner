@@ -6,7 +6,10 @@ package starmap
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/c12s/starmap/api"
 	starmapapi "github.com/c12s/starmap/api"
@@ -16,6 +19,10 @@ import (
 
 	"github.com/c12s/gprunner/pkg/model"
 )
+
+// ErrNoDigest is returned when an image layer comes back without a digest,
+// meaning starmap has no version matching the requested semver or arch.
+var ErrNoDigest = errors.New("layer image has no version matching the requested semver/arch")
 
 type Client struct {
 	conn *grpc.ClientConn
@@ -79,5 +86,35 @@ func toModel(resp *api.GetChartResp) (model.Chart, error) {
 		return model.Chart{}, fmt.Errorf("starmap: chart %q came back without an id", chart.Metadata.Name)
 	}
 
+	// reject before the caller saves it, so a selector starmap can't match
+	// never replaces a working copy of the chart
+	if missing := layersWithoutDigest(chart.ChartData); len(missing) > 0 {
+		return model.Chart{}, fmt.Errorf("starmap: chart %q, layers %s: %w", chart.Metadata.Name, strings.Join(missing, ", "), ErrNoDigest)
+	}
+
 	return chart, nil
+}
+
+// layersWithoutDigest lists, sorted, the image layers starmap returned no sha
+// for, which happens when no version matches the requested semver or arch.
+// Layers built from source have no image and need no digest.
+func layersWithoutDigest(cfg model.ChartConfig) []string {
+	var missing []string
+	check := func(md model.LayerMetadata) {
+		if strings.TrimSpace(md.Image) != "" && strings.TrimSpace(md.Sha) == "" {
+			missing = append(missing, fmt.Sprintf("%q (%s)", md.Name, md.Image))
+		}
+	}
+	for _, p := range cfg.StoredProcedures {
+		check(p.Metadata)
+	}
+	for _, et := range cfg.EventTriggers {
+		check(et.Metadata)
+	}
+	for _, e := range cfg.Events {
+		check(e.Metadata)
+	}
+	sort.Strings(missing)
+
+	return missing
 }
