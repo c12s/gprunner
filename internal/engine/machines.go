@@ -3,6 +3,8 @@ package engine
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os/exec"
@@ -17,8 +19,14 @@ const (
 	nameSep           = "_"
 )
 
-func machineName(chartID, layerID string) string {
-	return layerPrefix + nameSep + chartID + nameSep + layerID
+// machineNameHashLen is how many hex chars of the hash end up in the name
+const machineNameHashLen = 12
+
+// machineName is gp_<chartID>_<hash of the layer key>, see model.LayerKey.
+// Hashing keeps spaces out of the name and its length fixed.
+func machineName(chartID, layerKey string) string {
+	sum := sha256.Sum256([]byte(layerKey))
+	return chartPrefix(chartID) + hex.EncodeToString(sum[:])[:machineNameHashLen]
 }
 
 func chartPrefix(chartID string) string {

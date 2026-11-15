@@ -6,11 +6,32 @@ const (
 	DataSourceFileType DataSourceType = "file"
 )
 
+type LayerKind string
+
+const (
+	LayerKindProcedure LayerKind = "procedure"
+	LayerKindTrigger   LayerKind = "trigger"
+	LayerKindEvent     LayerKind = "event"
+)
+
+// LayerKey identifies a layer within a chart. starmap can hand the same layer
+// ID to different layers that share an image, but a layer name is unique
+// within its kind, so kind + name always tells layers apart.
+func LayerKey(kind LayerKind, name string) string {
+	return string(kind) + "/" + name
+}
+
 type ChartRef struct {
 	Name          string
 	Namespace     string
 	Maintainer    string
 	SchemaVersion string
+	Layers        map[string]LayerSelector
+}
+
+type LayerSelector struct {
+	Semver string
+	Arch   string
 }
 
 type Chart struct {
@@ -67,6 +88,10 @@ type LayerMetadata struct {
 	Prefix      string            `json:"prefix"`
 	Topic       string            `json:"topic"`
 	Description string            `json:"description"`
+	Pin         string            `json:"pin"`
+	Sha         string            `json:"sha"`
+	Semver      string            `json:"semver"`
+	Arch        string            `json:"arch"`
 }
 
 type BuildConfig struct {
